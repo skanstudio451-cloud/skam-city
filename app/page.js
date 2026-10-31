@@ -214,6 +214,8 @@ function Intro({ m, close }) {
   const box = { maxWidth: '90vw', maxHeight: '75vh' }
   const el = useRef(), cv = useRef()
   const [blk, setBlk] = useState(false)
+  const [snd, setSnd] = useState(false)
+  const toggleSound = () => { const e = el.current; if (!e) return; e.muted = !e.muted; setSnd(!e.muted); e.play().catch(() => {}) }
   useEffect(() => {
     const e = el.current
     if (!vid || !e) return
@@ -249,7 +251,10 @@ function Intro({ m, close }) {
         {ch && <canvas ref={cv} style={box} />}
         <E ref={el} src={m.url} crossOrigin="anonymous" {...P} style={ch ? { position: 'absolute', opacity: 0, width: 1, height: 1 } : box} />
       </div>
-      <button className="btn" onClick={close}>دخول</button>
+      <div>
+        {vid && <button className="btn ghost" onClick={toggleSound}>{snd ? 'إيقاف الصوت' : 'تشغيل الصوت'}</button>}
+        <button className="btn" onClick={close}>دخول</button>
+      </div>
     </div>
   )
 }
