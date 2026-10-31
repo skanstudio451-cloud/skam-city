@@ -206,10 +206,20 @@ function Countdown({ d, l }) {
 }
 
 function Intro({ m, close }) {
-  const vid = m.type === 'video', ch = m.chroma?.on, f = m.feather || 0
+  const ext = (m.url || '').split('?')[0].split('.').pop().toLowerCase()
+  const vid = ['mp4', 'webm', 'mov', 'm4v', 'ogv'].includes(ext) ? true
+    : ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif'].includes(ext) ? false : m.type === 'video'
+  const ch = m.chroma?.on, f = m.feather || 0
   const mask = f ? `radial-gradient(ellipse closest-side,#000 ${100 - f}%,transparent 100%)` : 'none'
   const box = { maxWidth: '90vw', maxHeight: '75vh' }
   const el = useRef(), cv = useRef()
+  const [blk, setBlk] = useState(false)
+  useEffect(() => {
+    const e = el.current
+    if (!vid || !e) return
+    e.muted = true
+    e.play().catch(() => setBlk(true))
+  }, [])
   useEffect(() => {
     if (!ch) return
     const e = el.current, c = cv.current, x = c.getContext('2d', { willReadFrequently: true })
@@ -231,7 +241,7 @@ function Intro({ m, close }) {
     draw(); if (!vid) e.onload = draw
     return () => cancelAnimationFrame(raf)
   }, [])
-  const P = vid ? { autoPlay: true, muted: true, playsInline: true, onEnded: close } : {}
+  const P = vid ? { autoPlay: true, muted: true, playsInline: true, controls: blk, onEnded: close } : {}
   const E = vid ? 'video' : 'img'
   return (
     <div className="intro">
