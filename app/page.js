@@ -9,7 +9,7 @@ const api = async (u, m = 'GET', b) => {
   return j
 }
 const DEF = {
-  title: 'SKAM CITY', c1: '#a78bfa', c2: '#3b0764', labels: {},
+  title: 'SKAM CITY', contact: '9j33', c1: '#a78bfa', c2: '#3b0764', labels: {},
   discord: 'https://discord.gg/ARQnRFAStQ',
   map: 'https://www.roblox.com/ar/games/87768377725414/SKAM-CITY',
   questions: ['ما هو الـ FearRP وكيف تتجنبه؟', 'ما هو الـ MetaGaming؟', 'ما الفرق بين RDM و VDM؟', 'تم القبض عليك أثناء سرقة، كيف تتصرف؟', 'ما هو قانون NLR؟']
@@ -20,7 +20,10 @@ const ITEMS = {
   criminals: { t: 'أخطر المجرمين', F: RANK, rank: 1 },
   soldiers: { t: 'أفضل العساكر', F: RANK, rank: 1 },
   staff: { t: 'مسؤولين SKAM CITY', F: [['discord_id', 'آيدي حساب دسكورد'], ['desc', 'الوصف', 'area']] },
-  products: { t: 'متجر الماب', store: 1, F: [['image', 'صورة المنتج', 'image'], ['name', 'الاسم'], ['desc', 'الوصف', 'area'], ['passId', 'ID تذكرة الشراء (Game Pass)']] },
+  products: { t: 'متجر الماب', store: 1, F: [['image', 'صورة المنتج', 'image'], ['name', 'الاسم'], ['desc', 'الوصف', 'area'],
+    ['pay', 'طريقة الدفع (التحويل لمنتجات وخدمات حقيقية، مو لعناصر روبلوكس)', 'select', [['gamepass', 'قيم باس (روبلوكس)'], ['transfer', 'تحويل (تواصل عبر دسكورد)']]],
+    ['price', 'السعر (يظهر للعميل، اختياري)'], ['qty', 'الكمية المتوفرة (0 = نفدت، وإذا ما كتبت شيء تكون غير محدودة)', 'number'],
+    ['passId', 'ID القيم باس (للقيم باس فقط)']] },
   roles: { t: 'التوظيف', F: [['discord_id', 'آيدي حساب دسكورد'], ['role', 'الرتبة', 'select', [['admin', 'مشرف / أدمن'], ['reviewer', 'مراجع اختبارات']]]] },
   pages: { t: 'الصفحات المخصصة', F: [['title', 'عنوان الصفحة'], ['body', 'المحتوى', 'area'], ['image', 'صورة', 'image']] }
 }
@@ -44,9 +47,9 @@ function Field({ f: [k, l, t, o], v = '', set }) {
   )
 }
 
-function Items({ kind, edit }) {
+function Items({ kind, edit, S }) {
   const c = ITEMS[kind]
-  const [rows, setRows] = useState([]), [f, setF] = useState(null), [rb, setRb] = useState({}), [err, setErr] = useState('')
+  const [rows, setRows] = useState([]), [f, setF] = useState(null), [rb, setRb] = useState({}), [err, setErr] = useState(''), [tick, setTick] = useState(0)
   const load = () => api('/api/items/' + kind).then((r) => setRows(c.rank ? r.sort((a, b) => a.data.rank - b.data.rank) : r)).catch((e) => setErr(e.message))
   useEffect(() => { load() }, [])
   const save = async () => {
@@ -55,12 +58,21 @@ function Items({ kind, edit }) {
   }
   const del = async (id) => { if (confirm('تأكيد الحذف؟')) { await api('/api/items/' + kind + '?id=' + id, 'DELETE'); load() } }
   const buy = async (r) => {
-    if (!rb[r.id]) return alert('اكتب يوزرك في روبلوكس أولاً')
-    try { location.href = (await api('/api/buy', 'POST', { productId: r.id, roblox: rb[r.id] })).url } catch (e) { setErr(e.message) }
+    const tr = r.data.pay === 'transfer'
+    if (!tr && !rb[r.id]) return alert('اكتب يوزرك في روبلوكس أولاً')
+    const w = tr ? null : window.open('', '_blank')
+    try {
+      const j = await api('/api/buy', 'POST', { productId: r.id, roblox: rb[r.id] })
+      setTick(tick + 1); load()
+      if (tr) alert('تم إرسال طلبك، بانتظار القبول')
+      else if (w) w.location.href = j.url
+      else location.href = j.url
+    } catch (e) { if (w) w.close(); setErr(e.message) }
   }
   return (
     <section>
       <h2>{c.t}</h2>{err && <p className="err">{err}</p>}
+      {kind === 'products' && <MyOrders S={S} tick={tick} />}
       {edit && <button className="btn" onClick={() => setF({ data: {} })}>إضافة</button>}
       {f && <div className="card form">
         {c.F.map((x) => <Field key={x[0]} f={x} v={f.data[x[0]]} set={(k, v) => setF({ ...f, data: { ...f.data, [k]: v } })} />)}
@@ -73,15 +85,38 @@ function Items({ kind, edit }) {
           <h3>{d.name || d.title}</h3>
           {d.role && <b>{ROLE[d.role]}</b>}
           <p>{d.desc || d.body}</p>
-          {c.store && <>
-            <input placeholder="يوزرك في روبلوكس" onChange={(e) => setRb({ ...rb, [r.id]: e.target.value })} />
-            <button className="btn" onClick={() => buy(r)}>شراء</button></>}
+          {c.store && d.price && <p><b>{d.price}</b></p>}
+          {c.store && typeof d.qty === 'number' && <p>{d.qty > 0 ? 'المتوفر: ' + d.qty : 'نفدت الكمية'}</p>}
+          {c.store && !(typeof d.qty === 'number' && d.qty <= 0) && <>
+            {d.pay !== 'transfer' && <input placeholder="يوزرك في روبلوكس" onChange={(e) => setRb({ ...rb, [r.id]: e.target.value })} />}
+            <button className="btn" onClick={() => buy(r)}>{d.pay === 'transfer' ? 'طلب شراء' : 'شراء'}</button></>}
           {edit && <div>
             <button className="btn ghost" onClick={() => setF({ id: r.id, data: { ...d } })}>تعديل</button>
             <button className="btn ghost" onClick={() => del(r.id)}>حذف</button></div>}
         </div>) })}
       </div>
     </section>
+  )
+}
+
+function MyOrders({ S, tick }) {
+  const [rows, setRows] = useState([])
+  useEffect(() => {
+    const go = () => api('/api/my-orders').then(setRows).catch(() => {})
+    go(); const t = setInterval(go, 15000); return () => clearInterval(t)
+  }, [tick])
+  if (!rows.length) return null
+  const msg = (o) => {
+    if (o.status === 'awaiting_purchase') return 'بانتظار إتمام الشراء. اشترِ القيم باس ثم ادخل الماب وبيوصل طلبك تلقائياً'
+    if (o.status === 'pending') return 'بانتظار قبول الطلب'
+    if (o.status === 'rejected') return 'تم رفض الطلب'
+    return o.pay === 'transfer' ? 'تم قبول طلبك. الرجاء التواصل مع ' + S.contact + ' عبر دسكورد' : 'تم قبول طلبك'
+  }
+  return (
+    <div className="card" style={{ margin: '14px 0' }}>
+      <h3>طلباتي</h3>
+      {rows.map((o) => <p key={o.id}><b>{o.product}:</b> {msg(o)}</p>)}
+    </div>
   )
 }
 
@@ -142,13 +177,15 @@ function Orders({ role }) {
   const load = () => api('/api/items/orders').then((r) => setRows(r.reverse())).catch((e) => setErr(e.message))
   useEffect(() => { load() }, [])
   const set = async (id, status) => { try { await api('/api/items/orders', 'PATCH', { id, data: { status } }); load() } catch (e) { setErr(e.message) } }
+  const L = { awaiting_purchase: 'بانتظار إتمام الشراء', pending: 'بانتظار القبول', accepted: 'مقبول', rejected: 'مرفوض' }
   return (
     <section><h2>طلبات المتجر</h2>{err && <p className="err">{err}</p>}
       {rows.map((r) => { const d = r.data; return (
         <div className="card" key={r.id} style={{ marginTop: 12 }}>
-          <h3>{d.product}</h3><p>دسكورد: {d.discord}. روبلوكس: {d.roblox}</p>
-          <p>الحالة: {{ pending: 'بانتظار القبول', accepted: 'مقبول', rejected: 'مرفوض' }[d.status]}</p>
-          {role === 'owner' && d.status === 'pending' && <div>
+          <h3>{d.product}</h3><p>دسكورد: {d.discord}.{d.roblox ? ' روبلوكس: ' + d.roblox : ''}</p>
+          <p>طريقة الدفع: {d.pay === 'transfer' ? 'تحويل' : 'قيم باس'}</p>
+          <p>الحالة: {L[d.status]}</p>
+          {role === 'owner' && ['pending', 'awaiting_purchase'].includes(d.status) && <div>
             <button className="btn" onClick={() => set(r.id, 'accepted')}>قبول</button>
             <button className="btn ghost" onClick={() => set(r.id, 'rejected')}>رفض</button></div>}
         </div>) })}
@@ -178,6 +215,7 @@ function Settings({ S }) {
         <Field f={['c2', 'اللون البنفسجي الغامق', 'color']} v={s.c2} set={u} />
         <Field f={['discord', 'رابط سيرفر الدسكورد']} v={s.discord} set={u} />
         <Field f={['map', 'رابط الماب']} v={s.map} set={u} />
+        <Field f={['contact', 'اسم التواصل في دسكورد (يظهر للعميل بعد قبول التحويل)']} v={s.contact} set={u} />
         <Field f={['text', 'إشعار يظهر لكل اللاعبين (اتركه فاضي للإلغاء)']} v={s.notice.text} set={(k, v) => u('notice', { ...s.notice, text: v })} />
         <Field f={['label', 'عنوان العداد التنازلي']} v={s.countdown.label} set={(k, v) => u('countdown', { ...s.countdown, label: v })} />
         <Field f={['date', 'تاريخ العداد', 'date']} v={s.countdown.date} set={(k, v) => u('countdown', { ...s.countdown, date: v })} />
@@ -299,7 +337,7 @@ export default function App() {
           <a className="btn" href={S.discord} target="_blank" rel="noreferrer">سيرفر الدسكورد</a>
           <a className="btn" href={S.map} target="_blank" rel="noreferrer">ماب {S.title}</a>
           {S.countdown?.date && <Countdown d={S.countdown.date} l={S.countdown.label} />}</div>}
-        {ITEMS[tab] && <Items key={tab} kind={tab} edit={staff} />}
+        {ITEMS[tab] && <Items key={tab} kind={tab} edit={staff} S={S} />}
         {tab === 'apply' && <Apply S={S} />}
         {tab === 'results' && <Results />}
         {tab === 'orders' && <Orders role={role} />}
