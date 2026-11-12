@@ -49,6 +49,18 @@ export async function PATCH(req, { params }) {
     if (!['accepted', 'rejected'].includes(data.status)) return E('حالة غير صحيحة', 400)
     if (data.status === 'rejected' && !String(data.reason || '').trim()) return E('سبب الرفض مطلوب', 400)
     d = { ...old.data, status: data.status, reason: data.reason, reviewer: g.s.user.name }
+  } else if (params.kind === 'orders') {
+    if (!['accepted', 'rejected'].includes(data.status)) return E('حالة غير صحيحة', 400)
+    if (!['pending', 'awaiting_purchase'].includes(old.data.status)) return E('تم البت في هذا الطلب مسبقاً', 409)
+    d = { ...old.data, status: data.status, decidedAt: Date.now() }
+    if (data.status === 'accepted' && old.data.productId) {
+      const { data: pr } = await db.from('items').select('data').eq('id', old.data.productId).single()
+      const q = pr?.data?.qty
+      if (typeof q === 'number') {
+        if (q <= 0) return E('نفدت كمية هذا المنتج', 409)
+        await db.from('items').update({ data: { ...pr.data, qty: q - 1 } }).eq('id', old.data.productId)
+      }
+    }
   } else d = await enrich(params.kind, { ...old.data, ...data })
   await db.from('items').update({ data: d }).eq('id', id)
   return Response.json({ ok: 1 })
